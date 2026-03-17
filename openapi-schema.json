@@ -1,0 +1,204 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Satellite Intelligence Segmentation API",
+    "version": "1.0.0",
+    "description": "AI-powered satellite image segmentation and intelligence analysis using SAM 2.1 on H100 GPUs. Upload a satellite/aerial image (via URL or base64) and receive: auto-segmented regions, Claude Vision-classified intelligence categories (military vehicles, infrastructure, runways, terrain disturbances, etc.), confidence scores, and an annotated image with numbered overlays and a detailed intelligence report panel."
+  },
+  "servers": [
+    {
+      "url": "https://serverless.on-demand.io/apps/satellite-segmentation"
+    }
+  ],
+  "paths": {
+    "/analyze/json": {
+      "post": {
+        "operationId": "analyzeSatelliteImage",
+        "summary": "Analyze a satellite or aerial image for intelligence segmentation",
+        "description": "Accepts a satellite/aerial image via URL or base64. Runs SAM 2.1 auto-segmentation on H100 GPU, filters segments by area, sends numbered overview to Claude Vision for military intelligence classification, and returns: (1) annotated image with colored overlays and numbered markers, (2) per-segment analysis with category, confidence, and description, (3) processing stats. Categories include: military_vehicle, military_installation, aircraft, vessel, vehicle, building, infrastructure, road, runway, terrain_disturbance, earthwork, water, vegetation, cleared_area, shadow, unknown.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image_url": {
+                    "type": "string",
+                    "description": "URL of the satellite/aerial image to analyze. Provide either image_url or image_base64."
+                  },
+                  "image_base64": {
+                    "type": "string",
+                    "description": "Base64-encoded image data (with or without data:image/... prefix). Provide either image_url or image_base64."
+                  },
+                  "points_per_side": {
+                    "type": "integer",
+                    "description": "SAM 2.1 grid density for auto-segmentation. Higher = more segments but slower. Default: 64",
+                    "default": 64
+                  },
+                  "pred_iou_thresh": {
+                    "type": "number",
+                    "description": "Minimum predicted IoU threshold for segments. Default: 0.82",
+                    "default": 0.82
+                  },
+                  "stability_score_thresh": {
+                    "type": "number",
+                    "description": "Minimum stability score for segments. Default: 0.90",
+                    "default": 0.90
+                  },
+                  "min_area_pct": {
+                    "type": "number",
+                    "description": "Minimum segment area as percentage of total image. Default: 0.1",
+                    "default": 0.1
+                  },
+                  "max_area_pct": {
+                    "type": "number",
+                    "description": "Maximum segment area as percentage of total image. Default: 60.0",
+                    "default": 60.0
+                  },
+                  "max_segments": {
+                    "type": "integer",
+                    "description": "Maximum number of segments to analyze. Default: 40",
+                    "default": 40
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis complete — returns annotated image and per-segment intelligence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "annotated_image_base64": {
+                      "type": "string",
+                      "description": "Base64-encoded JPEG of the annotated satellite image with colored segment overlays, numbered markers, and an intelligence report side panel"
+                    },
+                    "analyses": {
+                      "type": "array",
+                      "description": "Per-segment intelligence classification from Claude Vision",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "description": "Segment number (matches the numbered marker on the annotated image)"
+                          },
+                          "category": {
+                            "type": "string",
+                            "description": "Intelligence category: military_vehicle, military_installation, aircraft, vessel, vehicle, building, infrastructure, road, runway, terrain_disturbance, earthwork, water, vegetation, cleared_area, shadow, unknown"
+                          },
+                          "confidence": {
+                            "type": "string",
+                            "description": "Classification confidence: high, medium, or low"
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "Concise 5-15 word intelligence description of the segment"
+                          }
+                        }
+                      }
+                    },
+                    "stats": {
+                      "type": "object",
+                      "description": "Processing statistics",
+                      "properties": {
+                        "image_size": {
+                          "type": "array",
+                          "items": { "type": "integer" },
+                          "description": "Image dimensions [width, height]"
+                        },
+                        "raw_segments": {
+                          "type": "integer",
+                          "description": "Total segments detected by SAM 2.1"
+                        },
+                        "filtered_segments": {
+                          "type": "integer",
+                          "description": "Segments after area filtering"
+                        },
+                        "segmentation_time_s": {
+                          "type": "number",
+                          "description": "SAM 2.1 segmentation time in seconds"
+                        },
+                        "ai_analysis_time_s": {
+                          "type": "number",
+                          "description": "Claude Vision analysis time in seconds"
+                        },
+                        "total_time_s": {
+                          "type": "number",
+                          "description": "Total pipeline time in seconds"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request — missing image or bad parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string", "description": "Error message" }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "GPU backend error or analysis failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string", "description": "Error type" },
+                    "details": { "type": "string", "description": "Error details" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Check service and GPU backend health",
+        "description": "Returns health status of both the proxy service and the H100 GPU backend running SAM 2.1.",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "description": "Service status" },
+                    "proxy": { "type": "string", "description": "Proxy version" },
+                    "backend": {
+                      "type": "object",
+                      "properties": {
+                        "status": { "type": "string" },
+                        "model": { "type": "string", "description": "SAM model loaded" },
+                        "device": { "type": "string", "description": "GPU device" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

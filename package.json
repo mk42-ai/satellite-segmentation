@@ -1,0 +1,15 @@
+{
+  "name": "satellite-segmentation",
+  "version": "1.0.0",
+  "description": "SAM 2.1 Satellite Intelligence Segmentation - On-Demand proxy to H100 GPU backend",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.22.1",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
+    "form-data": "^4.0.1"
+  }
+}
