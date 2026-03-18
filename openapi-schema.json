@@ -78,6 +78,10 @@
                       "type": "string",
                       "description": "Base64-encoded JPEG of the annotated satellite image with colored segment overlays, numbered markers, and an intelligence report side panel"
                     },
+                    "annotated_image_url": {
+                      "type": "string",
+                      "description": "Direct URL to view the annotated segmented image in a browser. Use this URL to display or link to the segmented satellite image."
+                    },
                     "analyses": {
                       "type": "array",
                       "description": "Per-segment intelligence classification from Claude Vision",
@@ -163,6 +167,44 @@
                     "details": { "type": "string", "description": "Error details" }
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analyze/image/{sceneId}": {
+      "get": {
+        "operationId": "getSegmentedImage",
+        "summary": "Get a segmented satellite image as a directly viewable JPEG",
+        "description": "Fetches a Planet satellite scene thumbnail by scene ID, runs SAM 2.1 segmentation on it, and returns the annotated image directly as image/jpeg. Use this endpoint to get a viewable image URL for segmented satellite imagery. The URL can be displayed in chat or opened in a browser.",
+        "parameters": [
+          {
+            "name": "sceneId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Planet scene ID (e.g. 20260305_081904_42_24d3)"
+          },
+          {
+            "name": "segments",
+            "in": "query",
+            "schema": { "type": "boolean", "default": true },
+            "description": "Set to true to run segmentation, false to return the original thumbnail"
+          },
+          {
+            "name": "max_segments",
+            "in": "query",
+            "schema": { "type": "integer", "default": 40 },
+            "description": "Maximum number of segments to analyze"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Segmented satellite image returned as JPEG",
+            "content": {
+              "image/jpeg": {
+                "schema": { "type": "string", "format": "binary" }
               }
             }
           }

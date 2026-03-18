@@ -130,14 +130,81 @@ app.post('/analyze/json', async (req, res) => {
 
     const result = await backendRes.json();
 
+    // Build a direct image URL if we know the scene ID from the image_url
+    let annotated_image_url = '';
+    if (image_url) {
+      const sceneMatch = image_url.match(/\/([A-Za-z0-9_]+)$/);
+      if (sceneMatch) {
+        annotated_image_url = `https://serverless.on-demand.io/apps/satellite-segmentation/analyze/image/${sceneMatch[1]}?segments=true`;
+      }
+    }
+
     res.json({
       annotated_image_base64: result.annotated_image,
+      annotated_image_url,
       analyses: result.analyses,
       stats: result.stats,
     });
   } catch (e) {
     console.error('[ANALYZE-JSON ERROR]', e.message);
     res.status(500).json({ error: 'Analysis failed', details: e.message });
+  }
+});
+
+// ── Serve annotated image directly (GET for agents/browsers to display) ──
+app.get('/analyze/image/:sceneId', async (req, res) => {
+  try {
+    const { sceneId } = req.params;
+    const segments = req.query.segments !== 'false';
+    const itemType = req.query.item_type || 'PSScene';
+    const thumbnailUrl = `https://serverless.on-demand.io/apps/planet-proxy/thumbnail/${itemType}/${sceneId}`;
+
+    // Fetch the thumbnail
+    const imgRes = await fetch(thumbnailUrl, { timeout: 30000 });
+    if (!imgRes.ok) return res.status(400).json({ error: `Failed to fetch thumbnail: ${imgRes.status}` });
+    const imageBuffer = await imgRes.buffer();
+
+    if (!segments) {
+      // Just return the original thumbnail
+      res.set('Content-Type', 'image/jpeg');
+      return res.send(imageBuffer);
+    }
+
+    // Run segmentation on the GPU backend
+    const form = new FormData();
+    form.append('image', imageBuffer, { filename: `${sceneId}.jpg`, contentType: 'image/jpeg' });
+    form.append('points_per_side', String(req.query.points_per_side || 64));
+    form.append('pred_iou_thresh', String(req.query.pred_iou_thresh || 0.82));
+    form.append('stability_score_thresh', String(req.query.stability_score_thresh || 0.90));
+    form.append('min_area_pct', String(req.query.min_area_pct || 0.1));
+    form.append('max_area_pct', String(req.query.max_area_pct || 60.0));
+    form.append('max_segments', String(req.query.max_segments || 40));
+
+    const backendRes = await fetch(`${GPU_BACKEND}/analyze/satellite/json`, {
+      method: 'POST',
+      body: form,
+      headers: form.getHeaders(),
+      timeout: 300000,
+    });
+
+    if (!backendRes.ok) {
+      const errText = await backendRes.text();
+      return res.status(backendRes.status).json({ error: 'GPU backend error', details: errText });
+    }
+
+    const result = await backendRes.json();
+
+    if (result.annotated_image) {
+      const imgBuf = Buffer.from(result.annotated_image, 'base64');
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Content-Disposition', `inline; filename="${sceneId}_segmented.jpg"`);
+      return res.send(imgBuf);
+    }
+
+    res.status(500).json({ error: 'No annotated image returned from backend' });
+  } catch (e) {
+    console.error('[IMAGE ERROR]', e.message);
+    res.status(500).json({ error: 'Image analysis failed', details: e.message });
   }
 });
 
