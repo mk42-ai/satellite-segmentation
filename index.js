@@ -8,7 +8,7 @@ app.use(express.json({ limit: '50mb' }));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
-const GPU_BACKEND = process.env.GPU_BACKEND_URL || 'https://shipping-temp-treasurer-knit.trycloudflare.com';
+const GPU_BACKEND = process.env.GPU_BACKEND_URL || 'https://wolf-relevance-tail-rap.trycloudflare.com';
 
 // ── Health ──
 app.get('/health', async (req, res) => {
